@@ -131,11 +131,81 @@ pdf(file="heatmap_of_paired_test.pdf",width=9,height=7)
 heatmap.2(normal_methy[choose_probe,])
 dev.off()
 
+##validate that the purity can affect the detection of dmp
+purity<-read.table("BRCA-purity.txt",header=T,sep='\t')
+purity2<-purity[-which(!purity[,1]%in%colnames(tumor_methy)),]
+purity2<-purity2[order(purity2[,2]),]
+topten<-tumor_methy[,as.character(purity2[667:740,1])]
+bottomten<-tumor_methy[,as.character(purity2[1:74,1])]
+normalmethy2<-normal_methy[,-c(39,40,41,42,44,45,46,48)] ## 86
 
+##直接使用默认计算均值的方法，有NA值的就不计算
+z_test<-function(normal,tumor){
+  normal_mean<-rowMeans(normal)
+  normal_var<-apply(normal,1,var)
+  tumor_mean<-rowMeans(tumor)
+  tumor_var<-apply(tumor,1,var)
+  ztest<-(normal_mean-tumor_mean)/sqrt(normal_var/ncol(normal)+tumor_var/ncol(tumor))
+  p<-2*pnorm(abs(ztest),lower.tail=F)
+  p_adj<-p.adjust(p,method="bonferroni")
+  res<-cbind(ztest,p_adj)
+  return(res)
+}
 
+###topten Vs normalmethy2
+toptenztest<-z_test(normalmethy2,topten)
+###bottomten Vs normalmethy2
+bottomtenztest<-z_test(normalmethy2,bottomten)
 
+toptenztest<-toptenztest[order(toptenztest[,2]),]
+bottomtenztest<-bottomtenztest[order(bottomtenztest[,2]),]
 
+toptendmp<-row.names(toptenztest[1:10000,])
+bottomtendmp<-row.names(bottomtenztest[1:10000,])
 
+library(minfi)
+anno<-mapToGenome(file)
+color<-rep("top",10000)
+zvalue<-toptenztest[1:10000,1]
+pvalue<-toptenztest[1:10000,2]
+toptendmptoPlot<-data.frame(dmp=toptendmp,anno[toptendmp,c(1,2)],zvalue,pvalue,color)
+colnames(toptendmptoPlot)<-c("dmp","chr","pos","zvalue","adjp","color")
+color<-rep("bottom",10000)
+zvalue<-bottomtenztest[1:10000,1]
+pvalue<-bottomtenztest[1:10000,2]
+bottomtentoPlot<-data.frame(dmp=bottomtendmp,anno[bottomtendmp,c(1,2)],zvalue,pvalue,color)
+colnames(bottomtentoPlot)<-c("dmp","chr","pos","zvalue","adjp","color")
+plotdata<-rbind(toptendmptoPlot,bottomtentoPlot,make.row.names=F)
+colnames(plotdata)<-c("dmp","chr","pos","zvalue","adjp","color")
+plotdata$chr<-as.factor(plotdata$chr)
+library(ggplot2)
+pdf(file="ztest by chromsome.pdf",width=12,height=12)
+p<-ggplot(plotdata,aes(x=pos,y=zvalue,color=color))+geom_point(size=0.9)+facet_wrap(~chr,scales="free_x")
+print(p)
+dev.off()
+
+common<-intersect(toptendmp,bottomtendmp)
+subplotdata<-plotdata[which(plotdata$dmp%in%common),]
+ggplot(subplotdata,aes(color,zvalue,fill=color))+geom_boxplot()+ggtitle("common1615 dmp zvalue")
+
+##Mr. Teng  this plot can illstrate that purity of samples can affect the detection of differential methylation positions.
+idx=!is.na(bottomtenztest[,1])&!is.na(toptenztest[,1])
+plot(density(bottomtenztest[dix,1],na.rm=T),xlim=c(-40,40))
+lines(density(toptenztest[idx,1],na.rm=T),col='red')
+abline(v=c(-13,10),lty=2)
+
+##plot the barplot of bottom&top samples
+library(data.table)
+toptentoplot<-melt(topten)
+ggplot(toptentoplot,aes(value,y=..density..))+geom_histogram(binwidth = 0.005)
+  +geom_density(kernel="gaussian")+facet_wrap(~Var2,scales="free_y")
+
+bottomtentoplot<-melt(bottomten)
+pdf("bottomten_samples_density.pdf",width=24,height=24)
+p<-ggplot(bottomtentoplot,aes(value,y=..density..))+geom_histogram(binwidth = 0.005)
+  +geom_density(kernel="gaussian")+facet_wrap(~Var2,scales="free_y")
+print(p)
+dev.off()
 
 
 
