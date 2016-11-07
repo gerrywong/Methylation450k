@@ -5,7 +5,9 @@
 #time 20160905
 #by zxwang
 #############################
-library("data.table")
+library(data.table)
+library(ggplot2)
+library(minfi)
 filepool<-list.files("BRCA_methylation/DNA_Methylation/JHU_USC__HumanMethylation450/Level_3/")
 filepath<-paste0("BRCA_methylation/DNA_Methylation/JHU_USC__HumanMethylation450/Level_3/",filepool)
 tem<-strsplit(filepool,split='\\.')
@@ -206,6 +208,38 @@ p<-ggplot(bottomtentoplot,aes(value,y=..density..))+geom_histogram(binwidth = 0.
   +geom_density(kernel="gaussian")+facet_wrap(~Var2,scales="free_y")
 print(p)
 dev.off()
+
+diffofztest<-toptenztestorderbyrowname[,1]-bottomtenztestorderbyrowname[,1]
+cat(names(diffofztest[which(abs(diffofztest)>20),]),file="rownames_of_diff_more__than_20.txt")
+probemorethantwt<-scan("/media/gerry/data2/Data/rownames_of_diff_more__than_20.txt",what="character")
+bottomtentoplot<-bottomten[probemorethantwt,]
+toptentoplot<-topten[probemorethantwt,]
+bottomtentoplot<-data.frame(probe=rownames(bottomtentoplot),bottomtentoplot,rep("bottom",2138))
+toptentoplot<-data.frame(probe=rownames(toptentoplot),toptentoplot,rep("top",2138))
+colnames(bottomtentoplot)<-c("probe",1:74,"color")
+colnames(toptentoplot)<-c("probe",1:74,"color")
+mydata<-rbind(bottomtentoplot,toptentoplot)
+mydata2<-melt(mydata,id.vars=c("probe","color"))
+mydata2<-mydata2[order(mydata2[,1]),]
+ggplot(mydata2[1:1480,],aes(probe,value,fill=color))+geom_boxplot()
+
+##plot all normal samples' beta value of I&II probe
+for(i in 1:ncol(normalmethy2)){
+  toplot<-data.frame(value=normalmethy2[rownames(anno),i],type=anno[,9])
+  colnames(toplot)<-c("value","type")
+  ggplot(toplot,aes(value,color=type))+geom_density()+ggtitle(colnames(normalmethy2)[i])
+  ggsave(file=paste0(colnames(normalmethy2)[i],".png"))
+}
+
+
+
+
+
+
+
+
+
+
 
 
 
