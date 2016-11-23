@@ -100,6 +100,22 @@ p2_adj<-p.adjust(diff2_zp_sort[,2],method="bonferroni")
 diff2_zp<-cbind(diff2_zp_sort,p2_adj)
 rm(diff2_zp_sort)
 
+#######consider the NA value in original data
+diff1<-normal_methy[,choose_normal_ordered]-tumor_methy[,choose_tumor1_ordered]
+na_num_diff1<-apply(diff1,1,function(x) sum(is.na(x)))
+diff1_mean<-rowMeans(diff1,na.rm=T)
+diff1_sd<-apply(diff1,1,sd,na.rm=T)
+diff1_se<-diff1_sd/sqrt(ncol(diff1)-na_num_diff1)
+diff1_z<-diff1_mean/diff1_se
+p1<-2*pnorm(abs(diff1_z),lower.tail=F)
+diff1_zp<-cbind(diff1_z,p1)
+diff1_zp_sort<-diff1_zp[order(diff1_zp[,2]),]
+p1_adj<-p.adjust(diff1_zp_sort[,2],method="bonferroni")
+diff1_zp<-cbind(diff1_zp_sort,p1_adj)
+write.table(diff1_zp,file="BRCA_methy450_90Vs90_paired_ztest.txt",sep='\t',row.names=TRUE,quote=FALSE)
+rm(diff1_zp_sort)
+sig_probe1<-rownames(diff1_zp)[which(p1_adj<0.01)]
+
 ##96Vs650(649) z-test
 #
 indep_tumor_methy<-tumor_methy[,-choose_tumor]
@@ -223,13 +239,33 @@ mydata2<-melt(mydata,id.vars=c("probe","color"))
 mydata2<-mydata2[order(mydata2[,1]),]
 ggplot(mydata2[1:1480,],aes(probe,value,fill=color))+geom_boxplot()
 
-##plot all normal samples' beta value of I&II probe
-for(i in 1:ncol(normalmethy2)){
-  toplot<-data.frame(value=normalmethy2[rownames(anno),i],type=anno[,9])
-  colnames(toplot)<-c("value","type")
-  ggplot(toplot,aes(value,color=type))+geom_density()+ggtitle(colnames(normalmethy2)[i])
-  ggsave(file=paste0(colnames(normalmethy2)[i],".png"))
+##plot all samples' beta value of I&II probe
+file<-readTCGA("jhu.edu.llll.txt")
+anno<-getAnnotation(file)
+anno<-anno[,c(8,9)]
+allplot<-function(dataframe){
+  temp<-data.frame(dataframe[rownames(anno),],anno[,2])
+  colnames(temp)[length(colnames(temp))]<-"type"
+  temp<-melt(temp,id.vars="type")
+  pdf(paste0(substitute(dataframe),"_density_by_type.pdf"),width=30,height=30)
+  p<-ggplot(temp,aes(value,color=type))+geom_density()+facet_wrap(~variable)
+  print(p)
+  dev.off()
 }
+###ggsave("topten_density_by_type.pdf",width=28,height=28)  ##a big plot
+
+
+###plot several subplot with the function
+plotdensity<-function(dataframe){
+  for(i in 1:ceiling(ncol(dataframe)/25)){
+    toplot<-data.frame(value=dataframe[rownames(anno),((i-1)*25+1):min(i*25,ncol(dataframe))],type=anno[,2])
+    colnames(toplot)[length(colnames(toplot))]<-"type"
+    toplot<-melt(toplot,id.vars="type")
+    ggplot(toplot,aes(value,color=type))+geom_density()+facet_wrap(~variable)
+    ggsave(file=paste0(substitute(dataframe),(i-1)*25+1,"-",min(25*i,ncol(dataframe)),".pdf"),width=20,height=20)
+  }
+}
+
 
 
 
